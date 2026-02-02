@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fintech Dashboard</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 1rem; background: #f4f4f9; }
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+        input, button { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .hidden { display: none; }
+        #error-msg { color: red; }
+        #success-msg { color: green; }
+    </style>
+</head>
+<body>
+
+<div id="login-section" class="card">
+    <h2>Login</h2>
+    <input type="text" id="login-id" placeholder="Employee ID (e.g., EMP-200)">
+    <input type="password" id="login-pass" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <p id="error-msg"></p>
+</div>
+
+<div id="dashboard-section" class="card hidden">
+    <h2>Welcome!</h2>
+    <h1 id="balance-display">$0.00</h1>
+    <button onclick="logout()" style="background: #666;">Logout</button>
+
+    <h3>Send Money</h3>
+    <input type="text" id="to-email" placeholder="Receiver Email (e.g., bob@test.com)">
+    <input type="number" id="amount" placeholder="Amount (e.g., 50.00)">
+    <button onclick="transfer()">Send Money</button>
+    <p id="success-msg"></p>
+</div>
+
+<script>
+    const API_URL = "http://localhost:8080/api";
+    let token = localStorage.getItem("token");
+
+    if(token) showDashboard();
+
+    async function login() {
+        const id = document.getElementById("login-id").value;
+        const pass = document.getElementById("login-pass").value;
+
+        const res = await fetch(`${API_URL}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ employee_id: id, password: pass })
+        });
+
+        if(res.ok) {
+            const data = await res.json();
+            token = data.token;
+            localStorage.setItem("token", token);
+            showDashboard();
+        } else {
+            document.getElementById("error-msg").innerText = "Login Failed";
+        }
+    }
+
+    async function showDashboard() {
+        document.getElementById("login-section").classList.add("hidden");
+        document.getElementById("dashboard-section").classList.remove("hidden");
+
+        // Fetch Balance
+        const res = await fetch(`${API_URL}/v1/balance`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if(res.ok) {
+            const data = await res.json();
+            document.getElementById("balance-display").innerText = "$" + data.balance.toFixed(2);
+        }
+    }
+
+    async function transfer() {
+        const to = document.getElementById("to-email").value;
+        const amount = parseFloat(document.getElementById("amount").value);
+
+        const res = await fetch(`${API_URL}/v1/transfer`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                to: to,
+                amount: amount,
+                ref_id: "web-" + Date.now()
+            })
+        });
+
+        const data = await res.json();
+        if(res.ok) {
+            document.getElementById("success-msg").innerText = "Transfer Successful!";
+            showDashboard(); // Refresh balance
+        } else {
+            document.getElementById("success-msg").innerText = "Error: " + (data.error || "Failed");
+            document.getElementById("success-msg").style.color = "red";
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem("token");
+        location.reload();
+    }
+</script>
+</body>
+</html>

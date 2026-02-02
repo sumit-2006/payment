@@ -33,8 +33,8 @@ public class TransactionVerticle extends AbstractVerticle {
 
     private void processTransaction(Message<JsonObject> msg) {
         JsonObject req = msg.body();
-        String fromId = req.getString("from");
-        String toId = req.getString("to");
+        String fromProfileId = req.getString("from");
+        String toProfileId = req.getString("to");
         Double amountVal = req.getDouble("amount");
         String refId = req.getString("ref_id");
 
@@ -42,47 +42,73 @@ public class TransactionVerticle extends AbstractVerticle {
             msg.fail(400, "Amount must be positive");
             return;
         }
-        if (refId == null || refId.isEmpty()) {
-            msg.fail(400, "Reference ID is required");
-            return;
-        }
 
         double amount = amountVal;
 
-        // No need for <Boolean> type witness if you return the correct type (Maybe)
         dbClient.withTransaction(conn -> {
-            Single<Boolean> debitStep = Single.just(true);
 
-            // Step A: Debit Sender
-            if (fromId != null) {
-                String debitSql = "UPDATE accounts SET balance = balance - ?, version = version + 1 WHERE profile_id = ? AND balance >= ?";
+            // 1. RESOLVE: Translate Profile IDs -> Account IDs
+            Single<String> resolveSender = fromProfileId == null ? Single.just("SYSTEM") :
+                    conn.preparedQuery("SELECT id FROM accounts WHERE profile_id = ?")
+                            .rxExecute(Tuple.of(fromProfileId))
+                            .map(rows -> rows.size() > 0 ? rows.iterator().next().getString("id") : "NOT_FOUND");
 
-                debitStep = conn.preparedQuery(debitSql)
-                        .rxExecute(Tuple.of(amount, fromId, amount))
-                        .map(rows -> rows.rowCount() > 0)
-                        .flatMap(success -> success ? Single.just(true) : Single.error(new RuntimeException("Insufficient Funds")));
-            }
+            Single<String> resolveReceiver = toProfileId == null ? Single.just("SYSTEM") :
+                    conn.preparedQuery("SELECT id FROM accounts WHERE profile_id = ?")
+                            .rxExecute(Tuple.of(toProfileId))
+                            .map(rows -> rows.size() > 0 ? rows.iterator().next().getString("id") : "NOT_FOUND");
 
-            return debitStep.flatMap(ok -> {
-                // Step B: Credit Receiver
-                if (toId != null) {
-                    String creditSql = "UPDATE accounts SET balance = balance + ?, version = version + 1 WHERE profile_id = ?";
+            // 2. EXECUTE: Use the Resolved Account IDs for the Logic
+            return Single.zip(resolveSender, resolveReceiver, (senderAccId, receiverAccId) -> {
+                if ("NOT_FOUND".equals(senderAccId)) throw new RuntimeException("Sender Account not found");
+                if ("NOT_FOUND".equals(receiverAccId)) throw new RuntimeException("Receiver Account not found");
+                return new String[]{senderAccId, receiverAccId};
+            }).flatMap(ids -> {
+                String senderAccId = "SYSTEM".equals(ids[0]) ? null : ids[0];
+                String receiverAccId = "SYSTEM".equals(ids[1]) ? null : ids[1];
 
-                    return conn.preparedQuery(creditSql)
-                            .rxExecute(Tuple.of(amount, toId))
-                            .map(rows -> true);
+                Single<Boolean> debitStep = Single.just(true);
+
+                // Step A: Debit (Using Account ID is faster and safer)
+                if (senderAccId != null) {
+                    String debitSql = "UPDATE accounts SET balance = balance - ?, version = version + 1 WHERE id = ? AND balance >= ?";
+                    debitStep = conn.preparedQuery(debitSql)
+                            .rxExecute(Tuple.of(amount, senderAccId, amount))
+                            .map(rows -> rows.rowCount() > 0)
+                            .flatMap(success -> success ? Single.just(true) : Single.error(new RuntimeException("Insufficient Funds")));
                 }
-                return Single.just(true);
-            }).flatMap(ok -> {
-                // Step C: Insert Audit Record
-                String insertSql = "INSERT INTO transactions (id, sender_account_id, receiver_account_id, amount, status, reference_id, email_sent) VALUES (?, ?, ?, ?, 'COMPLETED', ?, false)";
-                return conn.preparedQuery(insertSql)
-                        .rxExecute(Tuple.of(UUID.randomUUID().toString(), fromId, toId, amount, refId))
-                        .map(res -> true);
-            }).toMaybe(); // <--- CRITICAL FIX: Convert Single<Boolean> to Maybe<Boolean>
+
+                return debitStep.flatMap(ok -> {
+                    // Step B: Credit (Using Account ID)
+                    if (receiverAccId != null) {
+                        String creditSql = "UPDATE accounts SET balance = balance + ?, version = version + 1 WHERE id = ?";
+                        return conn.preparedQuery(creditSql)
+                                .rxExecute(Tuple.of(amount, receiverAccId))
+                                .map(rows -> true);
+                    }
+                    return Single.just(true);
+                }).flatMap(ok -> {
+                    // Step C: Audit Log (NOW CORRECT: Uses Account ID, not Profile ID)
+                    String insertSql = "INSERT INTO transactions (id, sender_account_id, receiver_account_id, amount, status, reference_id, email_sent) VALUES (?, ?, ?, ?, 'COMPLETED', ?, false)";
+                    return conn.preparedQuery(insertSql)
+                            .rxExecute(Tuple.of(UUID.randomUUID().toString(), senderAccId, receiverAccId, amount, refId))
+                            .map(res -> true);
+                });
+            }).toMaybe();
 
         }).subscribe(
-                result -> msg.reply(new JsonObject().put("status", "SUCCESS").put("ref_id", refId)),
+                result -> { // 1. Reply to HTTP Client (Keep this)
+                    msg.reply(new JsonObject().put("status", "SUCCESS").put("ref_id", refId));
+
+                    // 2. NEW: Fire and Forget Email Event
+                    // (You would need to fetch the receiver's email in the transaction logic to pass it here)
+                    JsonObject emailEvent = new JsonObject()
+                            .put("amount", amount)
+                            .put("ref_id", refId)
+                            .put("email", "bob@test.com"); // Ideally fetched from DB
+
+                    vertx.eventBus().publish("event.transaction.success", emailEvent);
+                },
                 err -> {
                     System.err.println("Transaction Error: " + err.getMessage());
                     msg.fail(500, err.getMessage());

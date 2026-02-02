@@ -11,6 +11,7 @@ import io.vertx.rxjava3.ext.auth.jwt.JWTAuth;
 import io.vertx.rxjava3.ext.web.Router;
 import io.vertx.rxjava3.ext.web.handler.BodyHandler;
 import io.vertx.rxjava3.ext.web.handler.JWTAuthHandler;
+import io.vertx.rxjava3.ext.web.handler.StaticHandler;
 import io.vertx.rxjava3.mysqlclient.MySQLPool;
 import io.vertx.mysqlclient.MySQLConnectOptions;
 import io.vertx.sqlclient.PoolOptions;
@@ -33,7 +34,7 @@ public class RestApiVerticle extends AbstractVerticle {
 
         // --- 2. Instantiate Handlers ---
         AuthHandler authHandler = new AuthHandler(jwtAuth,dbClient); // <--- New Handler
-        TransferHandler transferHandler = new TransferHandler(vertx);
+        TransferHandler transferHandler = new TransferHandler(vertx,dbClient);
         PayrollHandler payrollHandler = new PayrollHandler(vertx);
         AccountHandler accountHandler = new AccountHandler(dbClient);
 
@@ -50,7 +51,7 @@ public class RestApiVerticle extends AbstractVerticle {
         router.post("/api/v1/transfer").handler(transferHandler::sendMoney);
         router.post("/api/v1/payroll").handler(payrollHandler::depositSalary);
         router.get("/api/v1/balance").handler(accountHandler::getBalance);
-
+        router.route("/*").handler(StaticHandler.create());
         return vertx.createHttpServer()
                 .requestHandler(router)
                 .rxListen(8080)
