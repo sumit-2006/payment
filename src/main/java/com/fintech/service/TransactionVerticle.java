@@ -98,16 +98,17 @@ public class TransactionVerticle extends AbstractVerticle {
 
         }).subscribe(
                 result -> { // 1. Reply to HTTP Client (Keep this)
+                    // 1. Reply to HTTP Client
                     msg.reply(new JsonObject().put("status", "SUCCESS").put("ref_id", refId));
 
-                    // 2. NEW: Fire and Forget Email Event
-                    // (You would need to fetch the receiver's email in the transaction logic to pass it here)
-                    JsonObject emailEvent = new JsonObject()
+                    // 2. Publish Success Event with IDs
+                    JsonObject eventData = new JsonObject()
                             .put("amount", amount)
                             .put("ref_id", refId)
-                            .put("email", "bob@test.com"); // Ideally fetched from DB
+                            .put("from_profile_id", fromProfileId) // Pass the Sender UUID
+                            .put("to_profile_id", toProfileId);    // Pass the Receiver UUID
 
-                    vertx.eventBus().publish("event.transaction.success", emailEvent);
+                    vertx.eventBus().publish("event.transaction.success", eventData);
                 },
                 err -> {
                     System.err.println("Transaction Error: " + err.getMessage());
