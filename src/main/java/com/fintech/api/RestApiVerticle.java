@@ -1,6 +1,8 @@
 package com.fintech.api;
 
 import com.fintech.handler.AccountHandler;
+import com.fintech.handler.ProfileHandler; // <--- Import
+import com.fintech.handler.TransactionHistoryHandler;
 import com.fintech.handler.AuthHandler; // <--- Import this
 import com.fintech.handler.PayrollHandler;
 import com.fintech.handler.TransferHandler;
@@ -23,34 +25,37 @@ public class RestApiVerticle extends AbstractVerticle {
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create());
 
-        // --- 1. Infrastructure Setup ---
+
         MySQLPool dbClient = MySQLPool.pool(vertx,
                 new MySQLConnectOptions().setPort(3306).setHost("localhost").setDatabase("payment").setUser("root").setPassword("Sumit@2006"),
                 new PoolOptions().setMaxSize(5));
 
-        // Setup JWT Provider (The "Key" to sign/verify tokens)
+
         JWTAuth jwtAuth = JWTAuth.create(vertx, new JWTAuthOptions()
                 .addPubSecKey(new PubSecKeyOptions().setAlgorithm("HS256").setBuffer("super_secret_key_for_fintech_app")));
 
-        // --- 2. Instantiate Handlers ---
+
         AuthHandler authHandler = new AuthHandler(jwtAuth,dbClient); // <--- New Handler
         TransferHandler transferHandler = new TransferHandler(vertx,dbClient);
         PayrollHandler payrollHandler = new PayrollHandler(vertx);
         AccountHandler accountHandler = new AccountHandler(dbClient);
+        TransactionHistoryHandler historyHandler = new TransactionHistoryHandler(dbClient);
+        ProfileHandler profileHandler = new ProfileHandler(dbClient);
 
-        // --- 3. Define Routes ---
 
-        // Public Route: Login (Generates the Token)
+
         router.post("/api/auth/login").handler(authHandler::login);
         router.post("/api/auth/signup").handler(authHandler::signup);
 
-        // Protected Middleware: All api/v1/* requests MUST have a valid Token
+
         router.route("/api/v1/*").handler(JWTAuthHandler.create(jwtAuth));
 
-        // Secured Business Routes
+
         router.post("/api/v1/transfer").handler(transferHandler::sendMoney);
         router.post("/api/v1/payroll").handler(payrollHandler::depositSalary);
         router.get("/api/v1/balance").handler(accountHandler::getBalance);
+        router.get("/api/v1/history").handler(historyHandler::getHistory);
+        router.get("/api/v1/profile").handler(profileHandler::getProfile);
         router.route("/*").handler(StaticHandler.create());
         return vertx.createHttpServer()
                 .requestHandler(router)

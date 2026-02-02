@@ -14,16 +14,16 @@ public class AccountHandler {
     }
 
     public void getBalance(RoutingContext ctx) {
-        // This is now the UUID (e.g., "550e8400-e29b...")
+
         String profileId = ctx.user().principal().getString("sub");
 
-        // FIX: Removed 'currency' column
+
         dbClient.preparedQuery("SELECT balance FROM accounts WHERE profile_id = ?")
                 .rxExecute(Tuple.of(profileId))
                 .subscribe(
                         rows -> {
                             if (rows.size() == 0) {
-                                // If no account found, return 0.00 or 404
+
                                 ctx.fail(404);
                             } else {
                                 Double balance = rows.iterator().next().getDouble("balance");
@@ -31,7 +31,7 @@ public class AccountHandler {
                             }
                         },
                         err -> {
-                            err.printStackTrace(); // Print error to console
+                            err.printStackTrace();
                             ctx.fail(500);
                         }
                 );

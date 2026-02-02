@@ -21,13 +21,11 @@ public class NotificationVerticle extends AbstractVerticle {
 
     @Override
     public io.reactivex.rxjava3.core.Completable rxStart() {
-        // 1. Setup Database
         MySQLConnectOptions connectOptions = new MySQLConnectOptions()
                 .setPort(3306).setHost("localhost").setDatabase("payment")
                 .setUser("root").setPassword("Sumit@2006");
         dbClient = MySQLPool.pool(vertx, connectOptions, new PoolOptions().setMaxSize(3));
 
-        // 2. Setup SMTP (Use your App Password settings)
         MailConfig config = new MailConfig()
                 .setHostname("smtp.gmail.com")
                 .setPort(587)
@@ -39,7 +37,6 @@ public class NotificationVerticle extends AbstractVerticle {
 
         mailClient = MailClient.create(vertx, config);
 
-        // 3. Listen for Events
         vertx.eventBus().consumer("event.transaction.success", this::handleNotification);
 
         return io.reactivex.rxjava3.core.Completable.complete();
@@ -62,7 +59,6 @@ public class NotificationVerticle extends AbstractVerticle {
                     String sEmail = emails[0];
                     String rEmail = emails[1];
 
-                    // FIX: Check for !isEmpty() instead of != null
                     if (!rEmail.isEmpty()) {
                         sendEmail(rEmail, "💰 You received $" + amount,
                                 "<h3>Payment Received</h3><p>You have received <b>$" + amount + "</b>.</p><p>Ref: " + refId + "</p>");
@@ -77,7 +73,6 @@ public class NotificationVerticle extends AbstractVerticle {
         );
     }
 
-    // FIX: Return "" instead of null
     private Single<String> resolveEmail(String profileId) {
         if (profileId == null || "SYSTEM".equals(profileId)) return Single.just("");
 

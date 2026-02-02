@@ -11,13 +11,13 @@ public class MainVerticle extends AbstractVerticle {
 
     @Override
     public void start(Promise<Void> startPromise) {
-        // 1. Deploy Transaction Service (The Core Banking Engine)
+
         vertx.deployVerticle(new TransactionVerticle())
                 .onFailure(startPromise::fail)
                 .onSuccess(txId -> {
                     System.out.println("✅ Transaction Service Deployed: " + txId);
 
-                    // 2. Deploy Notification Service (The Email Listener)
+
                     vertx.deployVerticle(new NotificationVerticle())
                             .onFailure(startPromise::fail)
                             .onSuccess(notifId -> {
@@ -34,7 +34,7 @@ public class MainVerticle extends AbstractVerticle {
                 });
     }
 
-    // Optional: Helper to run directly in IDE
+
     public static void main(String[] args) {
         Vertx.vertx().deployVerticle(new MainVerticle());
     }

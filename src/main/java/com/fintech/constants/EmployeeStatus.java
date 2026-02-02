@@ -4,7 +4,7 @@ import io.ebean.annotation.DbEnumValue;
 
 public enum EmployeeStatus {
     ACTIVE("ACTIVE"),
-    INACTIVE("INACTIVE"); // Use this to lock out fired employees
+    INACTIVE("INACTIVE");
 
     String value;
     EmployeeStatus(String value) { this.value = value; }

@@ -11,6 +11,6 @@ public enum EmployeeRole {
     String value;
     EmployeeRole(String value) { this.value = value; }
 
-    @DbEnumValue // Tells Ebean to store the String value in the DB
+    @DbEnumValue
     public String getValue() { return value; }
 }

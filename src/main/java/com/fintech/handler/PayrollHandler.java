@@ -12,9 +12,9 @@ public class PayrollHandler {
         this.vertx = vertx;
     }
 
-    // Handler for POST /api/v1/payroll
+
     public void depositSalary(RoutingContext ctx) {
-        // Security Check: Only FINANCE role can access this
+
         String role = ctx.user().principal().getString("role");
         if (!"FINANCE".equals(role)) {
             ctx.fail(403); // Forbidden

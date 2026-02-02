@@ -19,8 +19,7 @@ public class AuthHandler {
         this.dbClient = dbClient;
     }
 
-    // --- SECURE LOGIN ---
-    // In AuthHandler.java
+
 
     public void login(RoutingContext ctx) {
         JsonObject body = ctx.body().asJsonObject();
@@ -32,7 +31,7 @@ public class AuthHandler {
             return;
         }
 
-        // FIX: Select 'id' (UUID) along with the hash
+
         dbClient.preparedQuery("SELECT id, password_hash FROM profiles WHERE employee_id = ?")
                 .rxExecute(Tuple.of(employeeId))
                 .subscribe(
@@ -61,7 +60,6 @@ public class AuthHandler {
                 );
     }
 
-    // --- SECURE SIGNUP ---
     public void signup(RoutingContext ctx) {
         JsonObject body = ctx.body().asJsonObject();
 
@@ -76,21 +74,18 @@ public class AuthHandler {
             return;
         }
 
-        // 1. Hash the Password
         String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt(10));
 
         String profileId = UUID.randomUUID().toString();
         String accountId = UUID.randomUUID().toString();
 
         dbClient.withTransaction(conn -> {
-            // Step A: Insert Profile with Hash
-            // Note the added column: password_hash
             String sqlProfile = "INSERT INTO profiles (id, employee_id, first_name, last_name, email, role, status, password_hash) VALUES (?, ?, ?, ?, ?, 'EMPLOYEE', 'ACTIVE', ?)";
 
             return conn.preparedQuery(sqlProfile)
                     .rxExecute(Tuple.of(profileId, empId, first, last, email, hashedPassword))
                     .flatMap(res -> {
-                        // Step B: Create Account (Same as before)
+
                         String sqlAccount = "INSERT INTO accounts (id, profile_id, balance, version) VALUES (?, ?, 0.00, 1)";
                         return conn.preparedQuery(sqlAccount)
                                 .rxExecute(Tuple.of(accountId, profileId));

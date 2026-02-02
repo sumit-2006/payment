@@ -13,12 +13,12 @@ public class Transaction extends Model {
     @Id
     public String id;
 
-    // Nullable sender (for Payroll/Deposits)
+
     @ManyToOne
     @JoinColumn(name = "sender_account_id")
     public Account sender;
 
-    // Nullable receiver (for Fees/Withdrawals)
+
     @ManyToOne
     @JoinColumn(name = "receiver_account_id")
     public Account receiver;
@@ -30,7 +30,7 @@ public class Transaction extends Model {
     public TransactionStatus status;
 
     @Column(unique = true)
-    public String referenceId; // Idempotency Key
+    public String referenceId;
 
     public boolean emailSent = false;
     public Instant createdAt;

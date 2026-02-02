@@ -19,6 +19,6 @@ public class Account extends Model {
     @Column(columnDefinition = "DECIMAL(19,4) DEFAULT 0.0000")
     public BigDecimal balance;
 
-    @Version // The 'version' column for Optimistic Locking
+    @Version
     public Long version;
 }

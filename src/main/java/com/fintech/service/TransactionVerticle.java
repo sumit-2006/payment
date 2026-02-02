@@ -47,7 +47,6 @@ public class TransactionVerticle extends AbstractVerticle {
 
         dbClient.withTransaction(conn -> {
 
-            // 1. RESOLVE: Translate Profile IDs -> Account IDs
             Single<String> resolveSender = fromProfileId == null ? Single.just("SYSTEM") :
                     conn.preparedQuery("SELECT id FROM accounts WHERE profile_id = ?")
                             .rxExecute(Tuple.of(fromProfileId))
@@ -58,7 +57,6 @@ public class TransactionVerticle extends AbstractVerticle {
                             .rxExecute(Tuple.of(toProfileId))
                             .map(rows -> rows.size() > 0 ? rows.iterator().next().getString("id") : "NOT_FOUND");
 
-            // 2. EXECUTE: Use the Resolved Account IDs for the Logic
             return Single.zip(resolveSender, resolveReceiver, (senderAccId, receiverAccId) -> {
                 if ("NOT_FOUND".equals(senderAccId)) throw new RuntimeException("Sender Account not found");
                 if ("NOT_FOUND".equals(receiverAccId)) throw new RuntimeException("Receiver Account not found");
@@ -69,7 +67,6 @@ public class TransactionVerticle extends AbstractVerticle {
 
                 Single<Boolean> debitStep = Single.just(true);
 
-                // Step A: Debit (Using Account ID is faster and safer)
                 if (senderAccId != null) {
                     String debitSql = "UPDATE accounts SET balance = balance - ?, version = version + 1 WHERE id = ? AND balance >= ?";
                     debitStep = conn.preparedQuery(debitSql)
@@ -79,7 +76,6 @@ public class TransactionVerticle extends AbstractVerticle {
                 }
 
                 return debitStep.flatMap(ok -> {
-                    // Step B: Credit (Using Account ID)
                     if (receiverAccId != null) {
                         String creditSql = "UPDATE accounts SET balance = balance + ?, version = version + 1 WHERE id = ?";
                         return conn.preparedQuery(creditSql)
@@ -88,7 +84,6 @@ public class TransactionVerticle extends AbstractVerticle {
                     }
                     return Single.just(true);
                 }).flatMap(ok -> {
-                    // Step C: Audit Log (NOW CORRECT: Uses Account ID, not Profile ID)
                     String insertSql = "INSERT INTO transactions (id, sender_account_id, receiver_account_id, amount, status, reference_id, email_sent) VALUES (?, ?, ?, ?, 'COMPLETED', ?, false)";
                     return conn.preparedQuery(insertSql)
                             .rxExecute(Tuple.of(UUID.randomUUID().toString(), senderAccId, receiverAccId, amount, refId))
@@ -97,11 +92,9 @@ public class TransactionVerticle extends AbstractVerticle {
             }).toMaybe();
 
         }).subscribe(
-                result -> { // 1. Reply to HTTP Client (Keep this)
-                    // 1. Reply to HTTP Client
+                result -> {
                     msg.reply(new JsonObject().put("status", "SUCCESS").put("ref_id", refId));
 
-                    // 2. Publish Success Event with IDs
                     JsonObject eventData = new JsonObject()
                             .put("amount", amount)
                             .put("ref_id", refId)
