@@ -1,0 +1,63 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'io.github.goooler.shadow' version '8.1.8'
+}
+
+group = 'com.fintech'
+version = '1.0.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+def vertxVersion = '4.5.1'
+def junitJupiterVersion = '5.9.1'
+def ebeanVersion='14.3.0'
+
+dependencies {
+    implementation "io.vertx:vertx-core:$vertxVersion"
+    implementation "io.vertx:vertx-web:$vertxVersion"
+
+
+    implementation "io.vertx:vertx-mysql-client:$vertxVersion"
+    implementation "io.vertx:vertx-sql-client:$vertxVersion"
+
+    implementation "io.vertx:vertx-rx-java3:$vertxVersion"
+
+    implementation "io.vertx:vertx-auth-jwt:$vertxVersion"
+
+    implementation "io.vertx:vertx-mail-client:$vertxVersion"
+
+    implementation "io.ebean:ebean:$ebeanVersion"           // <--- Core Library
+    implementation "io.ebean:ebean-querybean:$ebeanVersion" // <--- Query Beans
+    implementation "io.ebean:ebean-ddl-generator:$ebeanVersion"
+
+    implementation 'org.mindrot:jbcrypt:0.4'
+
+    annotationProcessor "io.ebean:querybean-generator:$ebeanVersion"
+    testImplementation "io.vertx:vertx-junit5:$vertxVersion"
+    testImplementation "org.junit.jupiter:junit-jupiter:$junitJupiterVersion"
+}
+
+application {
+    mainClass = 'com.fintech.MainVerticle' // <--- IMPORTANT: Point to your Main file
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21 // Or 21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+
+shadowJar {
+    archiveClassifier.set('fat')
+    manifest {
+        attributes 'Main-Verticle': 'com.fintech.MainVerticle'
+    }
+    mergeServiceFiles()
+}

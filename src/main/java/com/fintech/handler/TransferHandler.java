@@ -1,5 +1,6 @@
 package com.fintech.handler;
 
+import com.fintech.utils.UserLookupUtil;
 import io.vertx.core.json.JsonObject;
 import io.vertx.rxjava3.core.Vertx;
 import io.vertx.rxjava3.ext.web.RoutingContext;
@@ -30,37 +31,11 @@ public class TransferHandler {
             return;
         }
 
-        // --- SMART LOOKUP LOGIC ---
-        Single<String> resolveReceiverId;
 
-        if (toInput.contains("@")) {
-            // Case 1: It is an Email -> Lookup UUID
-            resolveReceiverId = dbClient.preparedQuery("SELECT id FROM profiles WHERE email = ?")
-                    .rxExecute(Tuple.of(toInput))
-                    .map(rows -> {
-                        if (rows.size() == 0) throw new RuntimeException("User with email " + toInput + " not found");
-                        return rows.iterator().next().getString("id");
-                    });
 
-        } else if (toInput.length() == 36 && toInput.contains("-")) {
-            // Case 2: It is already a UUID -> Use directly
-            resolveReceiverId = Single.just(toInput);
 
-        } else {
-            // Case 3: It must be an Employee ID -> Lookup UUID
-            resolveReceiverId = dbClient.preparedQuery("SELECT id FROM profiles WHERE employee_id = ?")
-                    .rxExecute(Tuple.of(toInput))
-                    .map(rows -> {
-                        if (rows.size() == 0) throw new RuntimeException("User with Employee ID " + toInput + " not found");
-                        return rows.iterator().next().getString("id");
-                    });
-        }
-
-        // --- EXECUTE TRANSFER ---
-        resolveReceiverId.subscribe(
+        UserLookupUtil.lookupUser(dbClient, toInput).subscribe(
                 receiverProfileId -> {
-
-                    // Don't let users send money to themselves
                     if (receiverProfileId.equals(senderId)) {
                         ctx.response().setStatusCode(400).end(new JsonObject().put("error", "Cannot transfer to self").encode());
                         return;
